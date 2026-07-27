@@ -11,9 +11,9 @@ notebook is on GitHub and runs unchanged once you attach the competition data)
 
 The whole competition comes down to one thing:
 
-**The test set is 100% grayscale. The training set is 100% colour.**
+**The test set is 100% grayscale. The training set is 100% color.**
 
-Colour is a huge part of how you tell these species apart, so a colour-trained model falls apart at
+Color is a huge part of how you tell these species apart, so a color-trained model falls apart at
 test time. That's exactly what the baseline notebook shows: CV 0.92 but LB 0.54. It isn't
 overfitting, it's a domain shift.
 
@@ -50,8 +50,8 @@ Extract features, fit logistic regression, then score three combinations on the 
 
 | condition | macro-F1 |
 |---|---|
-| colour-train → gray-val | **0.566** |
-| colour-train → colour-val | **0.868** |
+| color-train → gray-val | **0.566** |
+| color-train → color-val | **0.868** |
 | **gray-train → gray-val** | **0.841** |
 
 The first row reproduces the baseline's 0.54 LB and the second reproduces its 0.874 CV, both within
@@ -81,7 +81,7 @@ cheap insurance against a compression mismatch.
   fold 2 *starts* at 0.897 and fold 3 at 0.930. That's what inflates its OOF to 0.926.
 - **It selects checkpoints on validation loss.** The metric is macro-F1, so select on that.
 - **Validation has to be grayscale too.** If you convert train and test but leave validation in
-  colour, your CV goes right back to lying to you.
+  color, your CV goes right back to lying to you.
 
 ## Training setup
 
