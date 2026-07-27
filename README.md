@@ -88,14 +88,14 @@ JPEG re-encode at q95
 LUMA_JITTER_PROB   = 0.5              # RGB->gray weights jittered +-0.05 around (.299,.587,.114)
 
 ==================== Augmentations ======================
-RANDOM_RESIZED_CROP = (0.65, 1.0)
+RANDOM_RESIZED_CROP = scale (0.65, 1.0), ratio (0.8, 1.25)
 HFLIP               = 0.5
 ROTATION_DEGREES    = 15
 BRIGHTNESS/CONTRAST = 0.2
 ERASING_PROB        = 0.25
 MIXUP_ALPHA         = 0.2
 CUTMIX_ALPHA        = 1.0
-MIX_PROB            = 0.5
+MIX_PROB            = 0.5      # switch_prob 0.5 between mixup and cutmix
 LABEL_SMOOTHING     = 0.1
 NO hue/saturation jitter (meaningless once the image is grayscale)
 
