@@ -1,0 +1,31 @@
+ref,fileName,date,description,status,publicScore,privateScore
+55000975,z5.csv,2026-07-26 12:25:17.903000,z5,SubmissionStatus.COMPLETE,0.8989,0.8894
+55000969,z1.csv,2026-07-26 12:25:16.777000,z1,SubmissionStatus.COMPLETE,0.9183,0.9075
+55000974,z5.csv,2026-07-26 12:25:16.777000,z5,SubmissionStatus.PENDING,,
+55000968,z4.csv,2026-07-26 12:25:16.733000,z4,SubmissionStatus.COMPLETE,0.9043,0.9070
+55000973,z5.csv,2026-07-26 12:25:16.733000,z5,SubmissionStatus.PENDING,,
+55000964,z3.csv,2026-07-26 12:25:16.693000,z3,SubmissionStatus.COMPLETE,0.9028,0.9052
+55000967,z4.csv,2026-07-26 12:25:16.693000,z4,SubmissionStatus.PENDING,,
+55000963,z2.csv,2026-07-26 12:25:16.670000,z2,SubmissionStatus.COMPLETE,0.9034,0.8978
+55000897,fx_c.csv,2026-07-26 12:22:49.690000,fx_c FixRes 256px variant,SubmissionStatus.COMPLETE,0.9113,0.9069
+55000896,fx_b.csv,2026-07-26 12:22:45.203000,fx_b FixRes 256px variant,SubmissionStatus.COMPLETE,0.9178,0.8971
+55000894,fx_a.csv,2026-07-26 12:22:40.397000,fx_a FixRes 256px variant,SubmissionStatus.COMPLETE,0.9100,0.9012
+55000727,g3.csv,2026-07-26 12:15:23.723000,g3 variant of the 0.9152 trio,SubmissionStatus.COMPLETE,0.8991,0.8943
+55000723,g2.csv,2026-07-26 12:15:18.633000,g2 variant of the 0.9152 trio,SubmissionStatus.COMPLETE,0.9074,0.9205
+55000720,g1.csv,2026-07-26 12:15:14.210000,g1 variant of the 0.9152 trio,SubmissionStatus.COMPLETE,0.9004,0.9073
+55000461,cand_E.csv,2026-07-26 12:04:36.620000,E: 5 strongest all families: cb18 + deit3 + swin_s + swin_base + swin_s@18ep,SubmissionStatus.COMPLETE,0.9043,0.8893
+55000459,cand_D.csv,2026-07-26 12:04:32.120000,D: convnext_base@18ep weighted 2x + deit3_base + swin_small@12ep,SubmissionStatus.COMPLETE,0.9055,0.9036
+55000429,cand_C.csv,2026-07-26 12:03:28.467000,C: top4 by OOF: convnext_base@18ep + convnext_base@12ep + deit3_base + swin_small@12ep,SubmissionStatus.COMPLETE,0.9097,0.9069
+55000398,cand_B.csv,2026-07-26 12:02:22.477000,"B: convnext_base@18ep + deit3_base + swin_small@12ep -- top3 by OOF, 3 architecture families",SubmissionStatus.COMPLETE,0.9152,0.9030
+55000396,cand_A.csv,2026-07-26 12:02:17.937000,"A: convnext_base@18ep (OOF .94889, best single) + swin_small@12ep (.94198) -- upgrade of the 0.9118 pair",SubmissionStatus.COMPLETE,0.9009,0.8882
+55000337,top2_oof.csv,2026-07-26 12:00:07.107000,true top-2 by OOF: convnext_base .9446 + deit3_base .9431 (convnet + transformer),SubmissionStatus.COMPLETE,0.9084,0.8929
+55000022,top3_blend.csv,2026-07-26 11:45:23.570000,"top3 by OOF, equal weight: convnext_base .9446 + deit3_base .9431 + swin_small .9420 (convnet + 2 transformer families)",SubmissionStatus.COMPLETE,0.9105,0.9024
+54999997,blend_v3.csv,2026-07-26 11:43:50.863000,"8-model OOF-weighted blend: 3 architecture families (convnext x3, swin x2, deit3, effnetv2 x2), 3-fold members up-weighted 1.5x",SubmissionStatus.COMPLETE,0.8952,0.9053
+54999804,blend_v2.csv,2026-07-26 11:34:46.903000,"6-model, 3-fold members up-weighted 1.5x (lower variance): cnxt_small3f .218 + cnxt_base .170 + swin_s .163 + cnxt_base2 .159 + swin_base .151 + effv2s3f .138",SubmissionStatus.COMPLETE,0.8962,0.8854
+54999735,top4_blend.csv,2026-07-26 11:31:38.227000,"top4 equal blend, all OOF>=0.937: convnext_base + swin_small + convnext_base2 + swin_base (2 convnets + 2 transformers)",SubmissionStatus.COMPLETE,0.8971,0.9004
+54999697,final_blend.csv,2026-07-26 11:30:18.490000,6-model OOF-weighted: cnxt_base .196 + swin_s .188 + cnxt_base2 .183 + swin_base .174 + cnxt_small3f .167 + effv2s .093,SubmissionStatus.COMPLETE,0.8985,0.8951
+54999672,final_blend.csv,2026-07-26 11:28:59.453000,5-model OOF-weighted: cnxt_base .237 + swin_s .227 + cnxt_base2 .221 + cnxt_small3f .202 + effv2s .113,SubmissionStatus.COMPLETE,0.8991,0.8949
+54999671,submission-2.csv,2026-07-26 11:28:57.883000,,SubmissionStatus.COMPLETE,0.8903,0.8903
+54999603,final_blend.csv,2026-07-26 11:25:27.583000,4-model OOF-weighted blend: convnext_base .304 + swin_small .292 + convnext_small3f .259 + effnetv2_s .145,SubmissionStatus.COMPLETE,0.9033,0.8952
+54999477,sub_swin_cnxtbase.csv,2026-07-26 11:20:33.403000,"swin_small(OOF .942) + convnext_base(OOF .945), 1-fold each, flip TTA, equal blend",SubmissionStatus.COMPLETE,0.9118,0.8922
+54998402,submission.csv,2026-07-26 10:26:55.653000,,SubmissionStatus.COMPLETE,0.8961,0.8967
