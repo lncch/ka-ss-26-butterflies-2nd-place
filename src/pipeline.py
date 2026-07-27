@@ -61,6 +61,11 @@ class Config:
     OUTPUT_DIR: str = "."
     MODEL_NAME: str = MODEL_ZOO[0]
     IMG_SIZE: int = 224
+    # Inference resolution. Defaults to IMG_SIZE. Setting it higher than IMG_SIZE is the FixRes
+    # trick: RandomResizedCrop magnifies objects during training, so testing a little larger can
+    # restore the apparent-scale match. Only valid for fully-convolutional backbones -- ViT/Swin
+    # have a fixed patch grid and must stay at their native size.
+    INFER_SIZE: int | None = None
     # Observed on a real run: val macro-F1 plateaus around epoch 11-12, so 14 captures it.
     EPOCHS: int = 14
     FOLDS: int = 3
@@ -435,11 +440,16 @@ def run(config: Config) -> Path:
                                  train_gray[tr_idx])
         va_ds = ButterflyDataset(train_df.iloc[va_idx], root, label_to_idx, False, cfg.IMG_SIZE,
                                  0.0, cfg.MATCH_JPEG, gray_images=train_gray[va_idx])
+        # Final OOF and test predictions may run at a different resolution than training (FixRes).
+        infer_size = cfg.INFER_SIZE or cfg.IMG_SIZE
+        va_ds_infer = ButterflyDataset(train_df.iloc[va_idx], root, label_to_idx, False, infer_size,
+                                       0.0, cfg.MATCH_JPEG, gray_images=train_gray[va_idx])
         te_ds = ButterflyDataset(
-            test_df, root, None, False, cfg.IMG_SIZE, 0.0, False,
+            test_df, root, None, False, infer_size, 0.0, False,
             gray_images=test_gray,
         )
         tr_dl, va_dl, te_dl = loader(tr_ds, cfg, True), loader(va_ds, cfg, False), loader(te_ds, cfg, False)
+        va_dl_infer = loader(va_ds_infer, cfg, False)
         y_val = np.array([label_to_idx[x] for x in train_df.iloc[va_idx]["label"]])
         best_score, best_state, best_kind = -1.0, None, "raw"
         for epoch in range(cfg.EPOCHS):
@@ -467,7 +477,7 @@ def run(config: Config) -> Path:
                 best_state = {k: v.detach().cpu().clone() for k, v in candidate.state_dict().items()}
             print(f"fold={fold + 1} epoch={epoch + 1} loss={loss:.4f} raw_f1={raw_f1:.4f}{extra}")
         model.load_state_dict(best_state)
-        oof[va_idx] = predict(model, va_dl, device, flip=True, scales=cfg.TTA_SCALES)
+        oof[va_idx] = predict(model, va_dl_infer, device, flip=True, scales=cfg.TTA_SCALES)
         covered[va_idx] = True
         test_folds.append(predict(model, te_dl, device, flip=True, scales=cfg.TTA_SCALES))
         np.save(output / f"test_probs_fold{fold}.npy", test_folds[-1])
@@ -604,6 +614,70 @@ def run_ensemble(config: Config, models: "list[str]") -> Path:
 
     if not tests:
         raise RuntimeError("No backbone finished; increase TIME_BUDGET_MIN.")
+    return top / "submission.csv"
+
+
+# %% The full solution: train every member and blend
+SOLUTION_MEMBERS = [
+    # ConvNeXt is fully convolutional, so it can be evaluated above its training resolution.
+    {"model": "convnext_base.fb_in22k_ft_in1k", "epochs": 18, "seed": 61, "infer_size": 256},
+    {"model": "convnext_base.fb_in22k_ft_in1k", "epochs": 12, "seed": 11, "infer_size": 256},
+    # DeiT3 and Swin have a fixed patch grid -- they must stay at 224.
+    {"model": "deit3_base_patch16_224.fb_in22k_ft_in1k", "epochs": 12, "seed": 51, "infer_size": 224},
+    {"model": "swin_small_patch4_window7_224.ms_in22k_ft_in1k", "epochs": 12, "seed": 7, "infer_size": 224},
+]
+
+
+def run_solution(config: Config, members: "list[dict]" = None) -> Path:
+    """Train every ensemble member and write the blended submission.
+
+    This is the whole solution in one call: each member is trained on its own stratified 80/20
+    split, predicted with hflip TTA at its own inference resolution, and the members are averaged
+    with equal weight. submission.csv is rewritten after every member, so an interrupted run still
+    leaves a valid submission behind.
+    """
+    members = members or SOLUTION_MEMBERS
+    top = Path(config.OUTPUT_DIR)
+    top.mkdir(parents=True, exist_ok=True)
+    _, train_df, test_df, classes = load_frames(config)
+    y_all = np.array([classes.index(v) for v in train_df["label"]])
+
+    started = time.monotonic()
+    probs, done = [], []
+    for i, m in enumerate(members):
+        used = (time.monotonic() - started) / 60
+        if i and used > config.TIME_BUDGET_MIN:
+            print(f"Time budget spent ({used:.0f} min); stopping with {len(probs)} member(s).")
+            break
+        tag = f"{m['model'].split('.')[0]}_e{m['epochs']}_s{m['seed']}"
+        print(f"\n{'=' * 74}\nMember {i + 1}/{len(members)}: {m['model']}"
+              f"  epochs={m['epochs']} seed={m['seed']} infer@{m['infer_size']}px\n{'=' * 74}")
+        sub_dir = top / f"member{i}_{tag}"
+        run(replace(config, MODEL_NAME=m["model"], EPOCHS=m["epochs"], SEED=m["seed"],
+                    INFER_SIZE=m["infer_size"], FOLDS=1, OUTPUT_DIR=str(sub_dir),
+                    TIME_BUDGET_MIN=config.TIME_BUDGET_MIN - used))
+
+        p = np.mean([np.load(f) for f in sorted(sub_dir.glob("test_probs_fold*.npy"))], axis=0)
+        probs.append(p / p.sum(1, keepdims=True))
+        done.append(tag)
+
+        covered = np.load(sub_dir / "oof_covered.npy")
+        oof = np.load(sub_dir / "oof_probs.npy")
+        print(f"  holdout macro-F1: {f1_score(y_all[covered], oof[covered].argmax(1), average='macro'):.5f}")
+        if len(probs) > 1:
+            agree = np.mean([probs[0].argmax(1) == q.argmax(1) for q in probs[1:]])
+            print(f"  agreement with member 1: {agree:.4f}  (disagreement is what the average exploits)")
+
+        blend = np.mean(probs, axis=0)
+        np.save(top / "ensemble_test_probs.npy", blend)
+        pd.DataFrame({"path": test_df["path"],
+                      "label": [classes[j] for j in blend.argmax(1)]}).to_csv(top / "submission.csv",
+                                                                             index=False)
+        print(f"  -> submission.csv now blends {len(probs)} member(s)")
+
+    if not probs:
+        raise RuntimeError("No member finished; increase TIME_BUDGET_MIN.")
+    print(f"\nDone. Blended {len(probs)} members: {', '.join(done)}")
     return top / "submission.csv"
 
 

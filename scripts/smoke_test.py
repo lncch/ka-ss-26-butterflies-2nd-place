@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import pandas as pd
-from src.pipeline import Config, run, run_ensemble, sanity_check_grayscale
+from src.pipeline import Config, run, run_solution, sanity_check_grayscale
 
 
 def main() -> None:
@@ -26,19 +26,19 @@ def main() -> None:
     assert submission["path"].tolist() == test["path"].tolist()
     assert set(submission["label"]) <= set(train["label"].unique())
 
-    # Exercise the multi-backbone path too (smoke mode forces one tiny model, so this
-    # validates the ensemble plumbing rather than the architectures).
-    ens = run_ensemble(Config(
-        DATA_ROOT=str(data), OUTPUT_DIR=str(out / "ens"), RUN_MODE="smoke",
+    # Exercise the full solution path: several members, each at its own inference size.
+    ens = run_solution(Config(
+        DATA_ROOT=str(data), OUTPUT_DIR=str(out / "sol"), RUN_MODE="smoke",
         TIME_BUDGET_MIN=30, USE_MPS=False,
-    ), ["mobilenetv3_small_050", "mobilenetv3_small_050"])
+    ), [{"model": "mobilenetv3_small_050", "epochs": 1, "seed": 1, "infer_size": 64},
+        {"model": "mobilenetv3_small_050", "epochs": 1, "seed": 2, "infer_size": 80}])
     e = pd.read_csv(ens)
     assert e.shape == (1480, 2), e.shape
     assert e["path"].tolist() == test["path"].tolist()
-    # Both backbones must actually have run, or the ensemble maths went untested.
-    assert (out / "ens" / "ensemble_test_probs.npy").exists()
-    assert len(list((out / "ens").glob("model*_*"))) == 2, "second backbone was skipped"
-    print("ENSEMBLE SMOKE PASSED: run_ensemble produced a valid 1480-row submission.")
+    assert set(e["label"]) <= set(train["label"].unique())
+    assert len(list((out / "sol").glob("member*"))) == 2, "second member did not run"
+    assert (out / "sol" / "ensemble_test_probs.npy").exists()
+    print("SOLUTION SMOKE PASSED: run_solution blended all members into a valid submission.")
 
     print("SMOKE TEST PASSED: valid 1480-row submission produced on CPU.")
 

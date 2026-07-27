@@ -33,65 +33,51 @@ what the leaderboard measures. Select a GPU accelerator, turn Internet on (for t
 and run top to bottom.
 """
 
-CONFIG = """# CONFIG — all user-facing knobs live in this one cell.
-# Measured on real T4 runs: ONE fold of a big backbone beats THREE folds of a small one, and
-# costs a third as much. 1 fold trains on 80% of the data (3 folds train on only 67%).
-#   convnext_base  1 fold, 12 epochs, 13 min  ->  OOF 0.94462
-#   swin_small     1 fold, 12 epochs, 13 min  ->  OOF 0.94198
-#   convnext_small 3 folds, 18 epochs, ~45min ->  OOF 0.94143
-# So: spend the budget on diverse strong backbones, not on more folds of one.
-ENSEMBLE_MODELS = [
-    'convnext_base.fb_in22k_ft_in1k',                 # best single model measured
-    'swin_base_patch4_window7_224.ms_in22k_ft_in1k',  # transformer — decorrelates the convnets
-    'tf_efficientnetv2_m.in21k_ft_in1k',              # third family
-    'deit3_base_patch16_224.fb_in22k_ft_in1k',        # second transformer; drop if short on time
+CONFIG = """# CONFIG
+# The four ensemble members, exactly as submitted. Each trains on its own stratified 80/20 split.
+# ConvNeXt is fully convolutional so it can be evaluated above its training resolution (FixRes);
+# DeiT3 and Swin have a fixed patch grid and must stay at 224.
+MEMBERS = [
+    {'model': 'convnext_base.fb_in22k_ft_in1k',                  'epochs': 18, 'seed': 61, 'infer_size': 256},
+    {'model': 'convnext_base.fb_in22k_ft_in1k',                  'epochs': 12, 'seed': 11, 'infer_size': 256},
+    {'model': 'deit3_base_patch16_224.fb_in22k_ft_in1k',         'epochs': 12, 'seed': 51, 'infer_size': 224},
+    {'model': 'swin_small_patch4_window7_224.ms_in22k_ft_in1k',  'epochs': 12, 'seed':  7, 'infer_size': 224},
 ]
-IMG_SIZE = 224
-EPOCHS = 12
-FOLDS = 1                         # 1 fold = trains on 80%; more backbones beat more folds
-RUN_MODE = 'full'
-TIME_BUDGET_MIN = 75              # split across ALL backbones; set to real remaining time
-USE_EMA = False
-P_LUMA_JITTER = 0.5
-MATCH_JPEG = True
-VERTICAL_FLIP = False
+IMG_SIZE = 224                    # training resolution; the source images are natively 224
+TIME_BUDGET_MIN = 240             # stops starting new members once spent
 BATCH_SIZE = 64
 NUM_WORKERS = 4
+P_LUMA_JITTER = 0.5               # randomises the RGB->gray weights slightly during training
+MATCH_JPEG = True                 # re-encode converted training images at q95
 DATA_ROOT = '/kaggle/input/competitions/ka-ss-26-challenge-1'   # auto-detected if this misses
 OUTPUT_DIR = '/kaggle/working'
 """
 
 TAIL_CELLS = [
     ("md", "## Locate the data and verify the domain\n\n"
-           "Works whether the competition is attached as a notebook Input or fetched with "
-           "`kagglehub.competition_download`. The sanity check fails loudly if the test set is "
-           "ever swapped for a colour one."),
+           "The assertion below is the whole premise of this solution: every test image must have "
+           "identical R, G and B channels. If that ever stops being true, nothing downstream is valid."),
     ("code", "DATA_ROOT = str(resolve_data_root(DATA_ROOT))\n"
              "print('Data root:', DATA_ROOT)\n"
-             "for _m in ENSEMBLE_MODELS:\n"
-             "    print(f'  weights OK: {_m}  (tag={assert_imagenet_only(_m)}, ImageNet-only)')\n"
-             "sanity_check_grayscale(DATA_ROOT, samples=None)   # asserts every test image is R == G == B\n"),
-    ("md", "## Train, validate, predict\n\n"
-           "Each backbone trains into its own subfolder, then their test probabilities are averaged.\n"
-           "`submission.csv` is rewritten after every fold *and* after every backbone, and the OOF array\n"
-           "is saved as it goes — so you can stop at any point and still have a valid ensemble.\n\n"
-           "Watch the `OOF ENSEMBLE` line: that is the measured score of the blend, not a guess."),
+             "for _m in MEMBERS:\n"
+             "    print(f\"  weights OK: {_m['model']}  (tag={assert_imagenet_only(_m['model'])}, ImageNet-only)\")\n"
+             "sanity_check_grayscale(DATA_ROOT, samples=None)   # asserts all 1480 test images are R == G == B\n"),
+    ("md", "## Train all four members and blend\n\n"
+           "Each member trains on its own 80/20 split, predicts with hflip TTA at its own inference\n"
+           "resolution, and the four are averaged with equal weight. `submission.csv` is rewritten after\n"
+           "every member, so stopping early still leaves a valid submission.\n\n"
+           "On a single T4 the whole run takes roughly an hour."),
     ("code", "cfg = Config(\n"
-             "    DATA_ROOT=DATA_ROOT, OUTPUT_DIR=OUTPUT_DIR,\n"
-             "    IMG_SIZE=IMG_SIZE, EPOCHS=EPOCHS, FOLDS=FOLDS,\n"
-             "    RUN_MODE=RUN_MODE, TIME_BUDGET_MIN=TIME_BUDGET_MIN, USE_EMA=USE_EMA,\n"
+             "    DATA_ROOT=DATA_ROOT, OUTPUT_DIR=OUTPUT_DIR, IMG_SIZE=IMG_SIZE,\n"
+             "    TIME_BUDGET_MIN=TIME_BUDGET_MIN, BATCH_SIZE=BATCH_SIZE, NUM_WORKERS=NUM_WORKERS,\n"
              "    P_LUMA_JITTER=P_LUMA_JITTER, MATCH_JPEG=MATCH_JPEG,\n"
-             "    VERTICAL_FLIP=VERTICAL_FLIP, BATCH_SIZE=BATCH_SIZE, NUM_WORKERS=NUM_WORKERS,\n"
              ")\n"
-             "submission_path = run_ensemble(cfg, ENSEMBLE_MODELS)\n"
+             "submission_path = run_solution(cfg, MEMBERS)\n"
              "print('Submission ready:', submission_path)\n"),
     ("md", "## Check the submission"),
     ("code", "import pandas as pd\n"
              "sub = pd.read_csv(submission_path)\n"
-             "print(sub.shape)\n"
-             "print('distinct classes predicted:', sub['label'].nunique(), 'of 100')\n"
-             "print('most / least predicted:', sub['label'].value_counts().iloc[0],\n"
-             "      '/', sub['label'].value_counts().iloc[-1])\n"
+             "print(sub.shape, '| distinct classes predicted:', sub['label'].nunique(), 'of 100')\n"
              "sub.head()\n"),
 ]
 

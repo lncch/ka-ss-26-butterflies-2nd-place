@@ -2,7 +2,7 @@
 """Rebuild the exact submission that scored public 0.9183 / private 0.9075.
 
 This is NOT a single notebook run. The scoring submission averaged four model outputs produced
-in four separate Kaggle kernel runs, two of which were then re-inferred locally at 256px:
+in four separate training runs, two of which were then re-inferred at 256px:
 
     convnext_base.fb_in22k_ft_in1k  seed 61, 18 epochs   -> re-inferred at 256px  (FixRes)
     convnext_base.fb_in22k_ft_in1k  seed 11, 12 epochs   -> re-inferred at 256px  (FixRes)
@@ -13,11 +13,10 @@ All four: FOLDS=1 (train on 80%), grayscale-matched, hflip TTA, equal weight.
 
 Steps to reproduce from scratch:
   1. Train the four models. Each is notebooks/train_gray.ipynb with ENSEMBLE_MODELS set to the one
-     backbone and SEED/EPOCHS as above; scripts/push_kernel.py does this patching and pushes to
-     Kaggle. Collect each run's test_probs_fold0.npy and fold0_raw.pt.
-  2. Re-infer the two convnext models at 256px with scripts/fixres.py (or fixres_single.py).
-     FixRes is worth checking rather than assuming -- it helped one of these two and hurt the other
-     on their respective holdouts, so it is not a reliable gain.
+     backbone and SEED/EPOCHS as above. Collect each run's test_probs_fold0.npy and fold0_raw.pt.
+  2. Re-infer the two convnext models at 256px with scripts/fixres.py. FixRes is worth checking
+     rather than assuming -- it helped one of these two and hurt the other on their respective
+     holdouts, so it is not a reliable gain.
   3. Run this script to average the four and write the submission.
 
 Note the honest caveat: step 2 is why this beat the plain 224px blend on the leaderboard, but its
