@@ -3,6 +3,9 @@
 100-species butterfly/moth classification, metric **macro-F1**.
 **Final score: 0.9075 private / 0.9183 public**, against a published baseline of 0.54.
 
+The complete solution is [`notebooks/train_gray.ipynb`](notebooks/train_gray.ipynb) — import it to
+Kaggle, add the competition data, and run it top to bottom.
+
 ---
 
 ## Summary
@@ -32,12 +35,21 @@ Comparing the two sets property by property:
 The first three rows match perfectly, which is why nothing looks wrong at a glance. The fourth is
 decisive: every test image has identical R, G and B channels, and not one training image does.
 
+The whole check is four lines:
+
+```python
+a = np.asarray(Image.open(path).convert('RGB'))
+is_gray = np.array_equal(a[..., 0], a[..., 1]) and np.array_equal(a[..., 1], a[..., 2])
+```
+
 The cheap tell that led there: test files are ~14% smaller than train files at identical dimensions
 (median 22.0 KB vs 25.5 KB). Same pixel count, less data — something had been removed.
 
 ## 2. Verifying it before training anything
 
-A frozen-ResNet50 linear probe on a held-out split, same images in all three conditions:
+Before spending any GPU time, a frozen-ResNet50 linear probe: extract penultimate features, fit
+logistic regression on a stratified 80/20 split, and score the three combinations on the *same*
+held-out images.
 
 | condition | macro-F1 |
 |---|---|
@@ -47,16 +59,14 @@ A frozen-ResNet50 linear probe on a held-out split, same images in all three con
 
 The first row lands within 0.03 of the published 0.54 leaderboard score and the second within 0.03
 of its 0.874 clean-fold CV — strong corroboration of the diagnosis from a probe with no fine-tuning
-at all. The third row is the fix.
-
-`scripts/probe_grayscale.py`
+at all. The third row is the fix, and it is what justified committing to the approach.
 
 ## 3. Choosing the conversion
 
 Grayscale conversion is not unique, and a mismatch would leave a residual train/test gap. Assuming
 both sets come from the same image pool, the conversion applied to train should bring its aggregate
-grayscale histogram closest to the test set's. Wasserstein distance, train-converted-under-X vs the
-real test set:
+grayscale histogram closest to the test set's. Converting a size-matched sample of training images
+under each candidate and measuring Wasserstein distance to the real test histogram:
 
 | conversion | distance ↓ |
 |---|---|
@@ -73,8 +83,6 @@ Converted training images are also re-encoded at JPEG q95. Identical quantizatio
 reveal how many times an image was compressed, so this is cheap insurance against a compression
 mismatch rather than a verified match.
 
-`scripts/identify_conversion.py`
-
 ## 4. Validation that actually predicts the leaderboard
 
 Three things matter, and the published starter gets all three wrong:
@@ -84,9 +92,9 @@ Three things matter, and the published starter gets all three wrong:
   logs show it: fold 1 climbs to 0.874 over seven epochs, then fold 2 *starts* at 0.897 and fold 3
   at 0.930. That inflates its reported OOF from ~0.874 to 0.926.
 - **Select checkpoints on validation macro-F1**, not validation loss — the metric is macro-F1.
-- **Validation images get the same grayscale transform as test**, and the final OOF predictions use
-  the same TTA as the test predictions, so the number being selected on measures what is actually
-  submitted. (Per-epoch validation runs without TTA; it only has to rank checkpoints.)
+- **Validation images get the same grayscale transform as test**, and the final held-out predictions
+  use the same TTA as the test predictions, so the number being selected on measures what is
+  actually submitted. (Per-epoch validation runs without TTA; it only has to rank checkpoints.)
 
 ## 5. Training recipe
 
@@ -106,12 +114,12 @@ Three things matter, and the published starter gets all three wrong:
 
 Four models, equal-weight probability average:
 
-| model | epochs | inference |
-|---|---|---|
-| `convnext_base.fb_in22k_ft_in1k` | 18 | 256px |
-| `convnext_base.fb_in22k_ft_in1k` | 12 | 256px |
-| `deit3_base_patch16_224.fb_in22k_ft_in1k` | 12 | 224px |
-| `swin_small_patch4_window7_224.ms_in22k_ft_in1k` | 12 | 224px |
+| model | epochs | seed | inference |
+|---|---|---|---|
+| `convnext_base.fb_in22k_ft_in1k` | 18 | 61 | 256px |
+| `convnext_base.fb_in22k_ft_in1k` | 12 | 11 | 256px |
+| `deit3_base_patch16_224.fb_in22k_ft_in1k` | 12 | 51 | 224px |
+| `swin_small_patch4_window7_224.ms_in22k_ft_in1k` | 12 | 7 | 224px |
 
 Held-out macro-F1 for the individual models ranged 0.938–0.949. Mixing architecture families matters
 more than the individual scores: ConvNeXt and the two transformers agree on only ~95% of test
@@ -121,52 +129,19 @@ Two members are evaluated at **256px** despite training at 224. `RandomResizedCr
 during training relative to a plain resize at test time, so testing at higher resolution can restore
 the apparent-scale match (the FixRes effect). Worth knowing before copying it: on our holdouts this
 gained +0.0033 on one ConvNeXt and *lost* 0.0026 on the other, so it is not a dependable free win —
-validate it on your own data rather than assuming it transfers.
+validate it on your own data rather than assuming it transfers. ConvNeXt is fully convolutional so it
+tolerates the resolution change; DeiT3 and Swin have a fixed patch grid and must stay at 224.
 
 ## 7. Running it
 
-**Everything is in one notebook.** `notebooks/train_gray.ipynb` trains all four members, runs the
-higher-resolution inference, blends them and writes `submission.csv` — no assembly required.
+Everything is in [`notebooks/train_gray.ipynb`](notebooks/train_gray.ipynb) — it trains all four
+members, runs the higher-resolution inference, blends them and writes `submission.csv`.
 
 1. Upload it to Kaggle (**Code → New Notebook → File → Import Notebook**).
 2. Add the competition as an Input, set the accelerator to a GPU, and turn Internet on so `timm`
    can fetch the ImageNet weights.
 3. Run all. It takes roughly an hour on a single GPU.
 
-`submission.csv` is rewritten after every member finishes, so an interrupted run still leaves a
-valid submission behind — it just blends fewer models.
-
-The members are declared in the first cell and are the exact four that were submitted:
-
-```python
-MEMBERS = [
-    {'model': 'convnext_base...',  'epochs': 18, 'seed': 61, 'infer_size': 256},
-    {'model': 'convnext_base...',  'epochs': 12, 'seed': 11, 'infer_size': 256},
-    {'model': 'deit3_base...',     'epochs': 12, 'seed': 51, 'infer_size': 224},
-    {'model': 'swin_small...',     'epochs': 12, 'seed':  7, 'infer_size': 224},
-]
-```
-
-To rebuild the exact scoring submission without retraining, `python3 scripts/reproduce_best.py`
-averages the saved per-member probabilities and reproduces the submitted CSV byte for byte.
-
-## 8. Repository
-
-```
-README.md                       this write-up
-notebooks/train_gray.ipynb      the complete solution, runnable top to bottom
-src/pipeline.py                 the same code as an importable module
-scripts/sync_notebook.py        regenerates the notebook from pipeline.py
-scripts/smoke_test.py           real-data CPU end-to-end test (~1 min)
-scripts/reproduce_best.py       rebuilds the scoring submission from saved probabilities
-scripts/probe_grayscale.py      the linear probe behind §2
-scripts/identify_conversion.py  the histogram matching behind §3
-scripts/fixres.py               the higher-resolution validation behind §6
-artifacts/probs/*.npy           the four members' test probabilities
-```
-
-The competition data is not redistributed here. Download it and unzip into `data/raw/`:
-
-```bash
-kaggle competitions download -c ka-ss-26-challenge-1
-```
+`submission.csv` is rewritten after every member finishes, so an interrupted run still leaves a valid
+submission — it just blends fewer models. The four members are declared in the first cell, so
+changing the ensemble is a one-line edit.
