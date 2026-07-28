@@ -3,10 +3,6 @@
 Thanks to KAUST Academy for hosting this one. The dataset had a trick hidden in it that made this a
 genuinely fun competition to debug, and once you find it the score jumps from 0.54 to 0.90+.
 
-**Code:** [github.com/lncch/ka-ss-26-butterflies-2nd-place](https://github.com/lncch/ka-ss-26-butterflies-2nd-place)
-(the competition is invite-only, so Kaggle will not let me publish the notebook there; the same
-notebook is on GitHub and runs unchanged once you attach the competition data)
-
 ## Summary
 
 The whole competition comes down to one thing:
